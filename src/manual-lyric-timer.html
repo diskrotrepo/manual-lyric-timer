@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vocal Logger</title>
+    <style>
+        :root {
+            --bg-zinc-900: #18181b;
+            --bg-zinc-800: #27272a;
+            --bg-black-40: rgba(0, 0, 0, 0.4);
+            --text-white: #ffffff;
+            --text-zinc-400: #a1a1aa;
+            --green-400: #4ade80;
+            --blue-400: #60a5fa;
+            --purple-400: #c084fc;
+            --red-400: #f87171;
+            --border-zinc-800: #27272a;
+        }
+
+        body {
+            background-color: var(--bg-zinc-900);
+            color: var(--text-white);
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            transition: background-color 0.1s;
+            box-sizing: border-box;
+            overscroll-behavior: none; 
+            user-select: none; 
+        }
+
+        body.recording { background-color: #14532d; }
+
+        .container {
+            width: 100%;
+            max-width: 64rem;
+            background-color: var(--bg-black-40);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-zinc-800);
+            backdrop-filter: blur(4px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            max-height: 95vh;
+        }
+
+        h1 {
+            text-align: center;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #f4f4f5;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        /* --- Layout Grid --- */
+        .workspace {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        @media (max-width: 768px) {
+            .workspace { grid-template-columns: 1fr; grid-template-rows: 1fr 1.5fr; }
+        }
+
+        /* --- Left: Lyrics Panel --- */
+        .lyrics-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 200px;
+            overflow: hidden;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-zinc-800);
+            color: var(--text-white);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            resize: none;
+            box-sizing: border-box;
+            user-select: text;
+        }
+        textarea:focus { outline: 1px solid var(--blue-400); }
+
+        .lyrics-list {
+            flex: 1;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-zinc-800);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+
+        .lyric-item {
+            padding: 0.5rem;
+            margin-bottom: 2px;
+            cursor: pointer;
+            border-radius: 4px;
+            color: #71717a;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+        }
+        
+        .lyric-item:hover { background: rgba(255,255,255,0.05); color: #d4d4d8; }
+        
+        .lyric-item.active {
+            background: rgba(37, 99, 235, 0.2);
+            color: var(--blue-400);
+            border-left: 3px solid var(--blue-400);
+            font-weight: bold;
+        }
+
+        .lyric-item.done {
+            color: var(--green-400);
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+
+        .lyrics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        /* --- Right: Data Panel --- */
+        .data-panel {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .file-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            background-color: var(--bg-zinc-800);
+            border: 2px dashed #52525b;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+        .file-label:hover { background-color: #3f3f46; }
+
+        /* Player */
+        #player-section {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-text {
+            background: none;
+            border: none;
+            color: var(--text-zinc-400);
+            font-family: monospace;
+            font-size: 0.75rem;
+            text-decoration: underline;
+            cursor: pointer;
+            padding: 0;
+        }
+        .btn-text:hover { color: var(--text-white); }
+        .btn-text-danger:hover { color: var(--red-400); }
+
+        audio {
+            width: 100%;
+            margin-bottom: 0.5rem;
+            height: 2.5rem;
+            filter: invert(1) hue-rotate(180deg);
+            border-radius: 0.5rem;
+        }
+
+        .control-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-zinc-800);
+        }
+
+        .speed-control { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+        .toggle-control { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-zinc-400); border-left: 1px solid #3f3f46; padding-left: 0.5rem; margin-left: 0.5rem; }
+
+        input[type=range] {
+            width: 100%; max-width: 80px; height: 4px; background: #4b5563; border-radius: 2px; appearance: none; outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: #e4e4e7; border-radius: 50%; cursor: pointer; }
+
+        /* Buttons Grid for Mobile */
+        .controls { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 0.5rem; 
+            margin-bottom: 0.5rem; 
+        }
+        
+        button.action-btn {
+            display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.75rem; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-primary { background: #2563eb; color: white; border: none; }
+        .btn-primary:hover { background: #1d4ed8; }
+        
+        .btn-copy { background-color: rgba(63, 63, 70, 0.3); color: #e4e4e7; border: 1px solid #52525b; }
+        .btn-copy:hover:not(:disabled) { background-color: rgba(63, 63, 70, 0.5); }
+        
+        .btn-save { background-color: rgba(37, 99, 235, 0.15); color: #93c5fd; border: 1px solid #1d4ed8; }
+        .btn-save:hover:not(:disabled) { background-color: rgba(37, 99, 235, 0.3); }
+
+        .btn-copy-lrc { background-color: rgba(192, 132, 252, 0.15); color: #e9d5ff; border: 1px solid #9333ea; }
+        .btn-copy-lrc:hover:not(:disabled) { background-color: rgba(192, 132, 252, 0.3); }
+
+        /* Record Trigger */
+        .record-trigger {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #27272a;
+            border: 2px solid #3f3f46;
+            border-radius: 0.5rem;
+            color: #a1a1aa;
+            font-family: monospace;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.1s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .record-trigger:active, .record-trigger.active {
+            background-color: #22c55e;
+            color: #052e16;
+            border-color: #4ade80;
+            transform: scale(0.98);
+        }
+
+        /* Table */
+        .table-container {
+            border: 1px solid var(--border-zinc-800); background-color: rgba(24, 24, 27, 0.5); border-radius: 0.5rem; overflow: hidden;
+            flex: 1; 
+            min-height: 100px;
+            display: flex; flex-direction: column;
+        }
+        .table-scroll { flex: 1; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        thead { background-color: var(--bg-zinc-800); position: sticky; top: 0; }
+        th { text-align: left; padding: 0.5rem; color: var(--text-zinc-400); border-bottom: 1px solid #3f3f46; font-size: 0.75rem;}
+        td { padding: 0.5rem; border-bottom: 1px solid var(--border-zinc-800); }
+        
+        tr.segment-row { cursor: pointer; transition: background 0.1s; }
+        tr.segment-row:hover { background-color: rgba(63, 63, 70, 0.5); }
+        tr.segment-row:active { background-color: rgba(37, 99, 235, 0.2); }
+
+        .time-start { color: var(--green-400); font-family: monospace; }
+        .time-end { color: var(--red-400); font-family: monospace; }
+        
+        .lyric-cell { 
+            color: var(--blue-400); 
+            font-style: italic; 
+            max-width: 100px; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis;
+            cursor: text;
+        }
+        .lyric-cell:hover { background: rgba(255,255,255,0.05); border-radius: 4px; }
+        .lyric-cell:focus { 
+            outline: 1px solid var(--blue-400); 
+            background: black; 
+            color: white; 
+            font-style: normal;
+            overflow: visible;
+            cursor: text;
+        }
+
+        .row-del-btn {
+            background: none; border: none; color: #52525b; cursor: pointer; font-weight: bold; padding: 0 0.5rem;
+        }
+        .row-del-btn:hover { color: var(--red-400); }
+
+        .index { color: #71717a; width: 1.5rem; }
+        .hidden { display: none; }
+        .recovery-msg { background: #064e3b; color: #86efac; padding: 0.75rem; text-align: center; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.75rem; border: 1px solid #34d399; font-weight: bold;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vocal Logger</h1>
+        
+        <div class="workspace">
+            
+            <div class="lyrics-panel">
+                <div class="lyrics-header">
+                    <span style="font-size:0.75rem; color:#a1a1aa; text-transform:uppercase; letter-spacing:0.1em;">Lyrics</span>
+                    <button id="btn-toggle-lyrics" class="action-btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.65rem;">Lock Lyrics</button>
+                </div>
+                
+                <textarea id="lyrics-input" placeholder="Paste lyrics here..."></textarea>
+                
+                <div id="lyrics-display" class="lyrics-list hidden"></div>
+            </div>
+
+            <div class="data-panel">
+                
+                <div id="recovery-msg" class="recovery-msg hidden">
+                    ✨ Session Restored. Select audio to resume.
+                </div>
+
+                <div id="upload-section" class="upload-area">
+                    <label class="file-label">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 0.5rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <span style="color: #a1a1aa; font-size: 0.875rem;">Select Audio File</span>
+                        <input type="file" id="file-input" accept="audio/*" style="display: none;">
+                    </label>
+                </div>
+
+                <div id="player-section" class="hidden">
+                    <div class="player-header">
+                        <button id="btn-swap-audio" class="btn-text">Swap Audio</button>
+                        <button id="btn-new-project" class="btn-text btn-text-danger">New Project</button>
+                    </div>
+
+                    <audio id="audio-player" controls></audio>
+                    
+                    <div class="control-panel">
+                        <div class="speed-control">
+                            <span style="font-size:0.75rem; text-transform:uppercase; color:#a1a1aa;">Spd:</span>
+                            <input type="range" id="speed-slider" min="0.25" max="2.0" step="0.05" value="1.0">
+                            <span id="speed-display" style="font-weight:bold; min-width:2.5rem; font-size:0.75rem;">1.0x</span>
+                        </div>
+                        
+                        <div class="toggle-control">
+                            <input type="checkbox" id="remix-mode-check">
+                            <label for="remix-mode-check">Remix Mode</label>
+                        </div>
+                    </div>
+
+                    <button id="btn-record-trigger" class="record-trigger">
+                        Hold Space or Press Here
+                    </button>
+
+                    <div class="controls">
+                        <button id="btn-copy-srt" class="action-btn btn-copy" disabled>Copy SRT</button>
+                        <button id="btn-save-srt" class="action-btn btn-save" disabled>Save SRT</button>
+                        <button id="btn-copy-lrc" class="action-btn btn-copy-lrc" disabled>Copy LRC</button>
+                        <button id="btn-save-lrc" class="action-btn btn-copy-lrc" disabled>Save LRC</button>
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width: 1.5rem;">#</th>
+                                        <th>Text</th>
+                                        <th>Start</th>
+                                        <th>End</th>
+                                        <th style="width: 1rem;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="segments-body">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 1rem; color: #52525b; font-style: italic; font-size: 0.75rem;">
+                                            No segments.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 0.5rem; text-align: center; font-size: 0.65rem; color: #3f3f46; text-transform: uppercase;">
+            Vocal Logger • J/K/L to Nav • Space to Log
+        </div>
+    </div>
+
+    <script>
+        // --- State ---
+        let segments = [];
+        let isRecording = false;
+        let currentStart = null;
+        let audioUrl = null;
+        let currentRate = 1.0;
+        let originalFileName = "lyrics"; // Default filename
+        
+        let lyricLines = [];
+        let currentLyricIndex = 0;
+        let isLyricsLocked = false;
+
+        // --- Elements ---
+        const fileInput = document.getElementById('file-input');
+        const uploadSection = document.getElementById('upload-section');
+        const playerSection = document.getElementById('player-section');
+        const audioPlayer = document.getElementById('audio-player');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedDisplay = document.getElementById('speed-display');
+        const remixCheck = document.getElementById('remix-mode-check');
+        const body = document.body;
+        const segmentsBody = document.getElementById('segments-body');
+        const recoveryMsg = document.getElementById('recovery-msg');
+        
+        const btnCopySrt = document.getElementById('btn-copy-srt');
+        const btnSaveSrt = document.getElementById('btn-save-srt');
+        const btnCopyLrc = document.getElementById('btn-copy-lrc');
+        const btnSaveLrc = document.getElementById('btn-save-lrc');
+        const btnNewProject = document.getElementById('btn-new-project');
+        const btnSwapAudio = document.getElementById('btn-swap-audio');
+        
+        const lyricsInput = document.getElementById('lyrics-input');
+        const lyricsDisplay = document.getElementById('lyrics-display');
+        const btnToggleLyrics = document.getElementById('btn-toggle-lyrics');
+        const btnRecordTrigger = document.getElementById('btn-record-trigger');
+
+        // --- PERSISTENCE ---
+        const saveState = () => {
+            const state = {
+                segments,
+                lyricLines,
+                currentLyricIndex,
+                isLyricsLocked,
+                rawLyrics: lyricsInput.value,
+                remixMode: remixCheck.checked,
+                originalFileName
+            };
+            localStorage.setItem('vocal_logger_state', JSON.stringify(state));
+        };
+
+        const loadState = () => {
+            const saved = localStorage.getItem('vocal_logger_state');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    if ((state.segments && state.segments.length > 0) || (state.rawLyrics && state.rawLyrics.length > 0)) {
+                        segments = state.segments || [];
+                        lyricLines = state.lyricLines || [];
+                        currentLyricIndex = state.currentLyricIndex || 0;
+                        isLyricsLocked = state.isLyricsLocked;
+                        lyricsInput.value = state.rawLyrics || "";
+                        remixCheck.checked = state.remixMode || false;
+                        originalFileName = state.originalFileName || "lyrics";
+
+                        if (isLyricsLocked) {
+                            lyricsInput.classList.add('hidden');
+                            lyricsDisplay.classList.remove('hidden');
+                            btnToggleLyrics.innerText = "Edit";
+                            btnToggleLyrics.style.background = "#52525b";
+                            renderLyricsList();
+                        } else {
+                            lyricsInput.value = state.rawLyrics; 
+                        }
+                        recoveryMsg.classList.remove('hidden');
+                    }
+                } catch (e) { console.error("Load failed", e); }
+            }
+        };
+
+        loadState();
+
+        window.onbeforeunload = function() {
+            if (segments.length > 0) return "You have unsaved work. Are you sure?";
+        };
+
+        // --- Helper: Format Time ---
+        const formatTimeDisplay = (seconds) => {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 100);
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+        };
+
+        // --- Helper: Download File ---
+        const downloadFile = (content, filename) => {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        // --- UI Rendering ---
+        const renderTable = () => {
+            segmentsBody.innerHTML = '';
+            if (segments.length === 0) {
+                segmentsBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 1rem; color: #52525b; font-style: italic; font-size: 0.75rem;">No segments.</td></tr>`;
+                btnCopySrt.disabled = true;
+                btnSaveSrt.disabled = true;
+                btnCopyLrc.disabled = true;
+                btnSaveLrc.disabled = true;
+                return;
+            }
+
+            btnCopySrt.disabled = false;
+            btnSaveSrt.disabled = false;
+            btnCopyLrc.disabled = false;
+            btnSaveLrc.disabled = false;
+
+            segments.forEach((seg, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'segment-row';
+                
+                tr.onclick = (e) => {
+                    if (e.target.classList.contains('lyric-cell') || e.target.classList.contains('row-del-btn')) return;
+                    if (audioPlayer.src) {
+                        audioPlayer.currentTime = seg.start * (remixCheck.checked ? currentRate : 1.0);
+                    }
+                };
+
+                tr.innerHTML = `
+                    <td class="index">${index + 1}</td>
+                    <td class="lyric-cell" contenteditable="true">${seg.text}</td>
+                    <td class="time-start">${formatTimeDisplay(seg.start)}</td>
+                    <td class="time-end">${formatTimeDisplay(seg.end)}</td>
+                    <td><button class="row-del-btn" data-id="${seg.id}">×</button></td>
+                `;
+                
+                const textCell = tr.querySelector('.lyric-cell');
+                textCell.addEventListener('blur', (e) => {
+                    segments[index].text = e.target.innerText;
+                    saveState(); 
+                });
+                textCell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.target.blur();
+                    }
+                    e.stopPropagation();
+                });
+
+                const delBtn = tr.querySelector('.row-del-btn');
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); 
+                    const currentIdx = segments.findIndex(s => s.id === seg.id);
+                    if (currentIdx > -1) {
+                        segments.splice(currentIdx, 1);
+                        renderTable();
+                        saveState();
+                    }
+                };
+
+                segmentsBody.appendChild(tr);
+            });
+        };
+
+        const renderLyricsList = () => {
+            lyricsDisplay.innerHTML = '';
+            lyricLines.forEach((line, index) => {
+                const div = document.createElement('div');
+                div.className = `lyric-item ${index === currentLyricIndex ? 'active' : ''} ${index < currentLyricIndex ? 'done' : ''}`;
+                div.innerText = line;
+                div.onclick = () => {
+                    currentLyricIndex = index;
+                    renderLyricsList();
+                    saveState();
+                };
+                lyricsDisplay.appendChild(div);
+            });
+            
+            const activeEl = lyricsDisplay.children[currentLyricIndex];
+            if (activeEl) {
+                activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        // --- Core Logic ---
+        
+        const startLogging = () => {
+            if (isRecording || audioPlayer.paused) return; 
+            
+            isRecording = true;
+            const rawTime = audioPlayer.currentTime;
+            currentStart = remixCheck.checked ? (rawTime / currentRate) : rawTime;
+            
+            body.classList.add('recording');
+            btnRecordTrigger.innerText = "RECORDING...";
+            btnRecordTrigger.classList.add('active');
+        };
+
+        const stopLogging = () => {
+            if (!isRecording) return;
+            
+            const rawTime = audioPlayer.currentTime;
+            const end = remixCheck.checked ? (rawTime / currentRate) : rawTime;
+            
+            if (end > currentStart) {
+                let text = `Segment ${segments.length + 1}`;
+                if (isLyricsLocked && currentLyricIndex < lyricLines.length) {
+                    text = lyricLines[currentLyricIndex];
+                    currentLyricIndex++;
+                    renderLyricsList();
+                }
+
+                segments.push({
+                    id: Date.now(),
+                    start: currentStart,
+                    end: end,
+                    text: text
+                });
+                
+                segments.sort((a, b) => a.start - b.start);
+                
+                renderTable();
+                saveState(); 
+            }
+            
+            isRecording = false;
+            currentStart = null;
+            
+            body.classList.remove('recording');
+            btnRecordTrigger.innerText = "Hold Space or Press Here";
+            btnRecordTrigger.classList.remove('active');
+        };
+
+        // --- Event Listeners ---
+
+        window.addEventListener("keydown", (e) => {
+            if (document.activeElement.tagName === "TEXTAREA" || document.activeElement.isContentEditable) return;
+            
+            // Space: Record
+            if (e.code === "Space" && audioUrl && !e.repeat) {
+                e.preventDefault();
+                startLogging();
+            }
+
+            // Enter or K: Play/Pause
+            if ((e.code === "Enter" || e.key === "k" || e.key === "K") && audioUrl) {
+                e.preventDefault();
+                if (audioPlayer.paused) audioPlayer.play();
+                else audioPlayer.pause();
+            }
+
+            // J: Rewind 5s
+            if ((e.key === "j" || e.key === "J") && audioUrl) {
+                e.preventDefault();
+                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
+            }
+
+            // L: Forward 5s
+            if ((e.key === "l" || e.key === "L") && audioUrl) {
+                e.preventDefault();
+                audioPlayer.currentTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + 5);
+            }
+        });
+        
+        window.addEventListener("keyup", (e) => {
+            if (e.code === "Space" && audioUrl) {
+                if (document.activeElement.tagName === "TEXTAREA" || document.activeElement.isContentEditable) return;
+                e.preventDefault();
+                stopLogging();
+            }
+        });
+
+        const handleMouseStart = (e) => {
+            if (audioUrl) {
+                if (e.type === 'touchstart') e.preventDefault();
+                startLogging();
+                if (e.type === 'mousedown') {
+                    window.addEventListener('mouseup', handleMouseStop, { once: true });
+                } else if (e.type === 'touchstart') {
+                    window.addEventListener('touchend', handleMouseStop, { once: true });
+                }
+            }
+        };
+
+        const handleMouseStop = (e) => {
+            stopLogging();
+            window.removeEventListener('mouseup', handleMouseStop);
+            window.removeEventListener('touchend', handleMouseStop);
+        };
+
+        btnRecordTrigger.addEventListener('mousedown', handleMouseStart);
+        btnRecordTrigger.addEventListener('touchstart', handleMouseStart, {passive: false});
+
+        // --- Standard UI ---
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // Get filename without extension
+                const name = file.name.replace(/\.[^/.]+$/, "");
+                originalFileName = name;
+
+                if (audioUrl) URL.revokeObjectURL(audioUrl);
+                audioUrl = URL.createObjectURL(file);
+                audioPlayer.src = audioUrl;
+                
+                uploadSection.classList.add('hidden');
+                playerSection.classList.remove('hidden');
+                recoveryMsg.classList.add('hidden');
+                
+                renderTable();
+                audioPlayer.playbackRate = currentRate;
+                saveState(); // Save new filename
+            }
+        });
+
+        btnNewProject.addEventListener('click', () => {
+            if (confirm("⚠️ This will DELETE all current segments and lyrics. Start a new project?")) {
+                audioPlayer.pause();
+                audioPlayer.src = "";
+                segments = [];
+                lyricLines = [];
+                currentLyricIndex = 0;
+                isLyricsLocked = false;
+                originalFileName = "lyrics";
+                
+                currentStart = null;
+                isRecording = false;
+                playerSection.classList.add('hidden');
+                uploadSection.classList.remove('hidden');
+                recoveryMsg.classList.add('hidden');
+                body.classList.remove('recording');
+                fileInput.value = '';
+                lyricsInput.value = '';
+                lyricsInput.classList.remove('hidden');
+                lyricsDisplay.classList.add('hidden');
+                btnToggleLyrics.innerText = "Lock Lyrics";
+                btnToggleLyrics.style.background = "#2563eb";
+                
+                renderTable();
+                localStorage.removeItem('vocal_logger_state');
+            }
+        });
+
+        btnSwapAudio.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            currentRate = parseFloat(e.target.value);
+            audioPlayer.playbackRate = currentRate;
+            speedDisplay.innerText = currentRate + 'x';
+        });
+
+        remixCheck.addEventListener('change', saveState);
+
+        btnToggleLyrics.addEventListener('click', () => {
+            if (!isLyricsLocked) {
+                const text = lyricsInput.value;
+                lyricLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                if (lyricLines.length === 0) return; 
+
+                currentLyricIndex = 0;
+                isLyricsLocked = true;
+                lyricsInput.classList.add('hidden');
+                lyricsDisplay.classList.remove('hidden');
+                btnToggleLyrics.innerText = "Edit";
+                btnToggleLyrics.style.background = "#52525b";
+                renderLyricsList();
+            } else {
+                isLyricsLocked = false;
+                lyricsInput.classList.remove('hidden');
+                lyricsDisplay.classList.add('hidden');
+                btnToggleLyrics.innerText = "Lock";
+                btnToggleLyrics.style.background = "#2563eb";
+            }
+            saveState(); 
+        });
+        
+        lyricsInput.addEventListener('input', saveState);
+
+        // --- Export Generators ---
+        const pad = (n, z) => String(n).padStart(z, '0');
+
+        const generateSRT = () => {
+            return segments.map((seg, index) => {
+                const formatSRT = (s) => {
+                    const h = Math.floor(s / 3600);
+                    const m = Math.floor((s % 3600) / 60);
+                    const sec = Math.floor(s % 60);
+                    const ms = Math.floor((s % 1) * 1000);
+                    return `${pad(h, 2)}:${pad(m, 2)}:${pad(sec, 2)},${pad(ms, 3)}`;
+                };
+                return `${index + 1}\n${formatSRT(seg.start)} --> ${formatSRT(seg.end)}\n${seg.text}\n`;
+            }).join('\n');
+        };
+
+        const generateLRC = () => {
+            return segments.map((seg) => {
+                const m = Math.floor(seg.start / 60);
+                const s = Math.floor(seg.start % 60);
+                const ms = Math.floor((seg.start % 1) * 100);
+                return `[${pad(m, 2)}:${pad(s, 2)}.${pad(ms, 2)}]${seg.text}`;
+            }).join('\n');
+        };
+
+        // --- Action Handlers ---
+
+        btnCopySrt.addEventListener('click', () => {
+            navigator.clipboard.writeText(generateSRT());
+            const t = btnCopySrt.innerText;
+            btnCopySrt.innerText = "OK!";
+            setTimeout(() => btnCopySrt.innerText = t, 1000);
+        });
+
+        btnSaveSrt.addEventListener('click', () => {
+            downloadFile(generateSRT(), `${originalFileName}.srt`);
+        });
+
+        btnCopyLrc.addEventListener('click', () => {
+            navigator.clipboard.writeText(generateLRC());
+            const t = btnCopyLrc.innerText;
+            btnCopyLrc.innerText = "OK!";
+            setTimeout(() => btnCopyLrc.innerText = t, 1000);
+        });
+
+        btnSaveLrc.addEventListener('click', () => {
+            downloadFile(generateLRC(), `${originalFileName}.lrc`);
+        });
+
+    </script>
+</body>
+</html>
